@@ -5,13 +5,15 @@
 
 
 
+
   - Create directory structure: backend/, utils/, assets/, tests/, f1_cache/
   - Create requirements.txt with all dependencies (fastf1, pandas, numpy, matplotlib, plotly, streamlit, scikit-learn, seaborn)
   - Create __init__.py files for backend and utils packages
   - Create .gitignore file to exclude cache and Python artifacts
   - _Requirements: 10.1, 10.2_
 
-- [ ] 2. Implement data loader module
+- [-] 2. Implement data loader module
+
 
   - [ ] 2.1 Create backend/data_loader.py with FastF1 integration
     - Implement setup_cache() function to initialize FastF1 cache directory
