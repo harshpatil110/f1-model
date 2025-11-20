@@ -1,0 +1,325 @@
+# Implementation Plan
+
+- [x] 1. Set up project structure and dependencies
+
+
+
+
+  - Create directory structure: backend/, utils/, assets/, tests/, f1_cache/
+  - Create requirements.txt with all dependencies (fastf1, pandas, numpy, matplotlib, plotly, streamlit, scikit-learn, seaborn)
+  - Create __init__.py files for backend and utils packages
+  - Create .gitignore file to exclude cache and Python artifacts
+  - _Requirements: 10.1, 10.2_
+
+- [ ] 2. Implement data loader module
+
+  - [ ] 2.1 Create backend/data_loader.py with FastF1 integration
+    - Implement setup_cache() function to initialize FastF1 cache directory
+    - Implement load_session() function with error handling and Streamlit caching
+    - Implement get_drivers() to extract driver list from session
+    - Implement get_team_colors() to map drivers to team colors
+    - Implement get_available_years() returning 2018-present
+    - Implement get_grand_prix_list() for given year
+    - _Requirements: 1.1, 1.2, 1.3, 1.5, 9.1, 9.2_
+  - [ ]* 2.2 Write unit tests for data loader functions
+    - Test setup_cache() creates directory
+    - Test load_session() with mock FastF1 responses
+    - Test error handling for invalid year/GP
+    - Test get_drivers() and get_team_colors() extraction
+    - _Requirements: 1.1, 1.3_
+
+- [ ] 3. Implement analysis module
+
+  - [ ] 3.1 Create backend/analysis.py with lap time analysis
+    - Implement get_fastest_laps() to extract fastest lap per driver
+    - Implement get_top_n_laps() for top N fastest laps
+    - Implement analyze_sectors() calculating average sector times
+    - Implement calculate_sector_deltas() relative to reference driver
+    - _Requirements: 2.1, 2.2, 2.4, 2.5_
+  - [ ] 3.2 Add race pace analysis functions
+    - Implement analyze_race_pace() with outlier removal (107% threshold)
+    - Implement calculate_pace_degradation() using linear regression
+    - Implement get_stint_averages() for each tyre stint
+    - Add logic to remove pit laps and yellow flag laps from pace calculations
+    - _Requirements: 4.1, 4.2, 4.3, 4.4, 4.6_
+  - [ ] 3.3 Add weather data extraction
+    - Implement get_weather_data() extracting track temp, air temp, humidity
+    - Handle cases where weather data varies during session
+    - _Requirements: 6.1, 6.2, 6.3_
+  - [ ]* 3.4 Write unit tests for analysis functions
+    - Test fastest lap extraction accuracy
+    - Test outlier removal logic
+    - Test sector time calculations
+    - Test degradation calculation with known data
+    - _Requirements: 2.1, 4.1, 4.4_
+
+- [ ] 4. Implement telemetry module
+  - [ ] 4.1 Create backend/telemetry.py with telemetry extraction
+    - Implement get_telemetry_comparison() for two drivers
+    - Implement get_speed_trace() extracting speed vs distance
+    - Implement get_brake_trace() and get_throttle_trace()
+    - Handle lap_type parameter ('fastest' or specific lap number)
+    - _Requirements: 3.1, 3.2, 3.3_
+  - [ ] 4.2 Add telemetry analysis functions
+    - Implement calculate_corner_speeds() identifying corners (speed < 200 km/h)
+    - Implement calculate_straight_speeds() for maximum speeds
+    - Implement get_gear_usage() calculating percentage in each gear
+    - Implement get_drs_zones() identifying DRS activation zones
+    - _Requirements: 3.5_
+  - [ ]* 4.3 Write unit tests for telemetry functions
+    - Test telemetry extraction for valid laps
+    - Test corner and straight detection logic
+    - Test gear usage calculations
+    - Test DRS zone identification
+    - _Requirements: 3.1, 3.5_
+
+- [ ] 5. Implement compare module
+  - [ ] 5.1 Create backend/compare.py with comparison functions
+    - Implement compare_fastest_laps() returning comprehensive comparison dict
+    - Implement compare_race_pace() with lap-by-lap delta calculation
+    - Implement compare_sector_performance() for sector time comparison
+    - Implement compare_consistency() calculating lap time standard deviation
+    - _Requirements: 3.1, 4.5_
+  - [ ]* 5.2 Write unit tests for comparison functions
+    - Test fastest lap comparison with two drivers
+    - Test race pace comparison accuracy
+    - Test sector performance delta calculations
+    - _Requirements: 3.1, 4.5_
+
+- [ ] 6. Implement strategy module
+  - [ ] 6.1 Create backend/strategy.py with pit stop detection
+    - Implement detect_pit_stops() using PitInTime and PitOutTime flags
+    - Implement identify_stints() detecting compound changes and pit laps
+    - Implement analyze_tyre_compounds() for all drivers
+    - _Requirements: 5.1, 5.2, 5.5_
+  - [ ] 6.2 Add strategy analysis functions
+    - Implement calculate_undercut_effect() comparing 3-lap averages before/after pit
+    - Implement calculate_overcut_effect() for overcut analysis
+    - Implement get_stint_pace_comparison() for stint-by-stint comparison
+    - Implement create_strategy_timeline() for Gantt-style visualization data
+    - _Requirements: 5.6, 5.5_
+  - [ ]* 6.3 Write unit tests for strategy functions
+    - Test pit stop detection accuracy
+    - Test stint identification with compound changes
+    - Test undercut/overcut calculations
+    - _Requirements: 5.1, 5.2, 5.6_
+
+- [ ] 7. Implement ML model module
+  - [ ] 7.1 Create backend/ml_model.py with predictive models
+    - Implement predict_tyre_degradation() using LinearRegression
+    - Implement predict_qualifying_gap() using sector-based approach
+    - Implement predict_pit_window() based on degradation threshold
+    - Implement train_pace_model() using RandomForestRegressor
+    - Add confidence interval calculations for predictions
+    - Handle insufficient data cases with warnings
+    - _Requirements: 7.1, 7.2, 7.3, 7.4, 7.5_
+  - [ ]* 7.2 Write unit tests for ML functions
+    - Test degradation prediction with known stint data
+    - Test qualifying gap prediction accuracy
+    - Test pit window calculation logic
+    - Test model training with insufficient data
+    - _Requirements: 7.1, 7.5_
+
+- [ ] 8. Implement plotting utilities
+  - [ ] 8.1 Create utils/plotting.py with Plotly visualization functions
+    - Implement plot_telemetry_comparison() for speed, throttle, brake, RPM, gear overlays
+    - Implement plot_sector_comparison() with grouped bar charts
+    - Implement plot_race_pace() with scatter and regression trend line
+    - Implement plot_strategy_timeline() with Gantt-style timeline
+    - Apply consistent styling: team colors, Arial font, plotly_white theme
+    - _Requirements: 8.6, 2.5, 4.3_
+  - [ ] 8.2 Add additional plotting functions
+    - Implement plot_speed_heatmap() using matplotlib for track map
+    - Implement plot_tyre_degradation() with predictions and confidence bands
+    - Implement create_radar_chart() for multi-driver sector comparison
+    - Ensure all plots use FastF1 team colors consistently
+    - _Requirements: 8.6, 7.4_
+  - [ ]* 8.3 Write tests for plotting functions
+    - Test plot generation without errors
+    - Test color consistency across plots
+    - Test handling of empty datasets
+    - _Requirements: 8.6_
+
+- [ ] 9. Implement helper utilities
+  - [ ] 9.1 Create utils/helpers.py with utility functions
+    - Implement format_lap_time() converting seconds to MM:SS.mmm
+    - Implement parse_lap_time() converting MM:SS.mmm to seconds
+    - Implement validate_driver() checking driver exists in session
+    - Implement get_session_type_display_name() for UI display
+    - Implement calculate_percentage_change() for value comparisons
+    - Implement remove_outliers_iqr() using IQR method
+    - Implement smooth_telemetry() with rolling average
+    - _Requirements: 10.4_
+  - [ ]* 9.2 Write unit tests for helper functions
+    - Test lap time formatting and parsing
+    - Test driver validation logic
+    - Test outlier removal accuracy
+    - Test telemetry smoothing
+    - _Requirements: 10.4_
+
+- [ ] 10. Implement Streamlit frontend - Home page
+  - [ ] 10.1 Create app.py with Streamlit multi-page structure
+    - Set up Streamlit page configuration with F1 theme colors
+    - Initialize session state for storing loaded session data
+    - Create sidebar navigation for page selection
+    - _Requirements: 8.1, 8.5_
+  - [ ] 10.2 Implement Home page
+    - Display F1 logo and welcome message
+    - Create year dropdown using get_available_years()
+    - Create Grand Prix dropdown using get_grand_prix_list()
+    - Create session type dropdown (FP1, FP2, FP3, Qualifying, Race)
+    - Add "Load Session" button with spinner and error handling
+    - Store loaded session in st.session_state
+    - Display session info and weather data after loading
+    - _Requirements: 8.1, 1.1, 1.4, 9.4_
+
+- [ ] 11. Implement Streamlit frontend - Driver Analysis page
+  - [ ] 11.1 Create Driver Analysis page structure
+    - Check if session is loaded, show warning if not
+    - Create three sections: Fastest Lap Overview, Sector Analysis, Race Pace
+    - _Requirements: 8.2_
+  - [ ] 11.2 Implement Fastest Lap Overview section
+    - Display table of all drivers with fastest lap times using get_fastest_laps()
+    - Highlight overall fastest lap in the table
+    - Show top 10 fastest laps across all drivers
+    - _Requirements: 2.1, 2.2, 2.3_
+  - [ ] 11.3 Implement Sector Analysis section
+    - Generate bar charts comparing sector times using plot_sector_comparison()
+    - Create radar chart for multi-driver comparison using create_radar_chart()
+    - Display sector rankings for each of three sectors
+    - _Requirements: 2.4, 2.5, 2.6_
+  - [ ] 11.4 Implement Race Pace section
+    - Create driver selection dropdowns for comparison (up to 2 drivers)
+    - Generate lap time vs lap number graph using plot_race_pace()
+    - Show rolling median pace with trend line
+    - Display pace comparison delta between selected drivers
+    - _Requirements: 4.3, 4.5_
+
+- [ ] 12. Implement Streamlit frontend - Telemetry page
+  - [ ] 12.1 Create Telemetry page structure
+    - Check if session is loaded, show warning if not
+    - Create driver selection dropdowns (Driver 1, Driver 2)
+    - Create lap type selector (fastest lap or custom lap number)
+    - _Requirements: 8.3, 3.1_
+  - [ ] 12.2 Implement telemetry visualization tabs
+    - Create tabs: Speed, Throttle/Brake, Gear, RPM, Combined
+    - Speed tab: plot speed trace comparison using plot_telemetry_comparison()
+    - Throttle/Brake tab: overlay throttle and brake traces
+    - Gear tab: show gear usage comparison
+    - RPM tab: display RPM traces
+    - Combined tab: show all metrics in subplots
+    - _Requirements: 3.2, 3.3, 3.4, 3.6_
+  - [ ] 12.3 Add telemetry statistics display
+    - Show minimum corner speeds for both drivers
+    - Show maximum straight speeds for both drivers
+    - Display DRS zone usage
+    - Show gear usage percentages
+    - _Requirements: 3.5_
+
+- [ ] 13. Implement Streamlit frontend - Strategy page
+  - [ ] 13.1 Create Strategy page structure
+    - Check if session is loaded, show warning if not
+    - Create sections: Tyre Timeline, Pit Stop Summary, Stint Analysis, Undercut Calculator
+    - _Requirements: 8.4_
+  - [ ] 13.2 Implement Tyre Timeline section
+    - Generate strategy timeline using plot_strategy_timeline()
+    - Show compound usage for all drivers in Gantt-style chart
+    - Display color-coded tyre compounds
+    - _Requirements: 5.3_
+  - [ ] 13.3 Implement Pit Stop Summary section
+    - Display pit stop table with lap number and duration for all drivers
+    - Highlight fastest and slowest pit stops
+    - Show pit stop statistics
+    - _Requirements: 5.4_
+  - [ ] 13.4 Implement Stint Analysis section
+    - Create driver selection for stint-by-stint comparison
+    - Display stint pace comparison table
+    - Show compound usage and average pace per stint
+    - _Requirements: 5.5_
+  - [ ] 13.5 Implement Undercut Calculator section
+    - Create driver pair selection for undercut/overcut analysis
+    - Input pit lap number
+    - Calculate and display undercut/overcut effect
+    - Show time gained/lost visualization
+    - _Requirements: 5.6_
+
+- [ ] 14. Add ML predictions to frontend (optional feature)
+  - [ ] 14.1 Add tyre degradation prediction to Strategy page
+    - Create "Predict Degradation" section
+    - Select driver and stint for prediction
+    - Display predicted lap times with confidence intervals using plot_tyre_degradation()
+    - Show R-squared value for model quality
+    - Handle insufficient data cases with warning messages
+    - _Requirements: 7.1, 7.4, 7.5_
+  - [ ] 14.2 Add qualifying gap prediction to Driver Analysis page
+    - Create "Predict Qualifying Gap" section
+    - Select two drivers for comparison
+    - Display predicted time delta
+    - Show sector-based breakdown
+    - _Requirements: 7.2_
+  - [ ] 14.3 Add pit window prediction to Strategy page
+    - Create "Optimal Pit Window" section
+    - Select driver and target lap time
+    - Display recommended pit lap based on degradation
+    - Show degradation curve with pit window highlighted
+    - _Requirements: 7.3_
+
+- [ ] 15. Implement caching and performance optimization
+  - [ ] 15.1 Add Streamlit caching decorators
+    - Apply @st.cache_data to load_session() with TTL of 1 hour
+    - Apply @st.cache_data to all analysis functions
+    - Apply @st.cache_data to telemetry extraction functions
+    - Apply @st.cache_resource to ML model training
+    - _Requirements: 1.2, 9.1, 9.2, 9.3_
+  - [ ] 15.2 Optimize data loading and processing
+    - Implement lazy loading for telemetry (only when requested)
+    - Add selective loading for specific drivers/laps
+    - Implement telemetry downsampling for overview plots
+    - Clear old session data when loading new session
+    - _Requirements: 9.1, 9.4_
+
+- [ ] 16. Add error handling and user feedback
+  - [ ] 16.1 Implement comprehensive error handling
+    - Add try-except blocks for all FastF1 API calls
+    - Display user-friendly error messages using st.error() and st.warning()
+    - Add loading spinners for all long-running operations
+    - Validate user inputs (year range, driver selection)
+    - _Requirements: 1.3, 10.5_
+  - [ ] 16.2 Add user guidance and help text
+    - Add tooltips and help text for complex features
+    - Display cache status indicators
+    - Show data availability warnings
+    - Add instructions on Home page
+    - _Requirements: 8.1, 9.4_
+
+- [ ] 17. Create configuration and deployment files
+  - [ ] 17.1 Create Streamlit configuration
+    - Create .streamlit/config.toml with F1 theme colors
+    - Set primaryColor to #E70000 (F1 Red)
+    - Configure server settings (maxUploadSize, CORS)
+    - _Requirements: 10.1_
+  - [ ] 17.2 Create additional project files
+    - Create README.md with installation and usage instructions
+    - Create .gitignore excluding cache, __pycache__, .pyc files
+    - Add F1 logo to assets/logo.png
+    - _Requirements: 10.1, 10.3_
+
+- [ ] 18. Final integration and testing
+  - [ ] 18.1 Integration testing
+    - Test complete workflow: load session → analyze → visualize
+    - Test all page navigation and state persistence
+    - Test with multiple years and Grand Prix events
+    - Test error scenarios (invalid session, missing data)
+    - _Requirements: 1.1, 8.5_
+  - [ ] 18.2 Performance validation
+    - Verify cold session load time (10-30 seconds acceptable)
+    - Verify cached session load time (< 3 seconds)
+    - Verify plot rendering time (< 1 second per plot)
+    - Test memory usage with multiple sessions
+    - _Requirements: 9.2_
+  - [ ]* 18.3 Create test suite
+    - Set up pytest configuration
+    - Run all unit tests and verify coverage
+    - Create integration test for end-to-end workflow
+    - Document test execution instructions
+    - _Requirements: 10.1_
