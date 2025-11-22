@@ -1,29 +1,29 @@
 """
 F1 Analysis Dashboard - Streamlit Application
 
-A comprehensive Formula 1 data analysis dashboard featuring:
-- Lap time analysis
-- Sector comparison
-- Race pace analysis
-- Telemetry comparison with circuit map visualization
-- Weather data
+Complete F1 data analysis dashboard with:
+- Home: Session info and weather
+- Driver Analysis: Lap times, sectors, degradation
+- Telemetry: Circuit map comparison
+- Strategy: Pit stops and tyre stints
 """
 
 import streamlit as st
 import pandas as pd
+import numpy as np
+import plotly.graph_objects as go
+import plotly.express as px
 import fastf1
+
 from backend.data_loader import (
     setup_cache, load_session, get_drivers, get_team_colors,
     get_available_years, get_grand_prix_list
 )
 from backend.analysis import (
-    get_fastest_laps, get_top_n_laps, analyze_sectors,
-    calculate_sector_deltas, analyze_race_pace, calculate_pace_degradation,
-    get_stint_averages, get_weather_data
+    get_fastest_laps, analyze_sectors, analyze_race_pace,
+    calculate_pace_degradation, get_weather_data
 )
-from backend.telemetry import (
-    get_telemetry_comparison, get_speed_trace, get_brake_trace,
-    get_throttle_trace, calculate_corner_speeds, calculate_straight_speeds,
+from backend.strategy import get_pit_stops, eds, calculate_straight_speeds,
     get_gear_usage, get_drs_zones, build_circuit_comparison_map
 )
 
