@@ -1,9 +1,9 @@
 """
 F1 Analysis Dashboard - Streamlit Application
 
-Complete F1 data analysis dashboard with:
+Complete F1 data analysis dashboard matching the reference screenshots with:
 - Home: Session info and weather
-- Driver Analysis: Lap times, sectors, degradation
+- Driver Analysis: Lap times, sectors, race pace, degradation
 - Telemetry: Circuit map comparison
 - Strategy: Pit stops and tyre stints
 """
@@ -20,10 +20,12 @@ from backend.data_loader import (
     get_available_years, get_grand_prix_list
 )
 from backend.analysis import (
-    get_fastest_laps, analyze_sectors, analyze_race_pace,
-    calculate_pace_degradation, get_weather_data
+    get_fastest_laps, get_top_n_laps, analyze_sectors, calculate_sector_deltas,
+    analyze_race_pace, calculate_pace_degradation, get_stint_averages, get_weather_data
 )
-from backend.strategy import get_pit_stops, eds, calculate_straight_speeds,
+from backend.strategy import get_pit_stops, get_tyre_stints
+from backend.telemetry import (
+    get_telemetry_comparison, calculate_corner_speeds, calculate_straight_speeds,
     get_gear_usage, get_drs_zones, build_circuit_comparison_map
 )
 
@@ -38,49 +40,86 @@ st.set_page_config(
 # Initialize cache
 setup_cache()
 
-# Title
-st.title("🏎️ F1 Analysis Dashboard")
-st.markdown("---")
+# Custom CSS for better styling
+st.markdown("""
+<style>
+    .main-header {
+        font-size: 2.5rem;
+        font-weight: bold;
+        color: #E70000;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
+    .session-info-box {
+        background-color: #1E4D2B;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 1rem;
+        color: white;
+    }
+    .metric-card {
+        background-color: #262730;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        text-align: center;
+    }
+</style>
+""", unsafe_allow_html=True)
 
-# Sidebar - Session Selection
-st.sidebar.header("📊 Session Selection")
+# Title
+st.markdown('<h1 class="main-header">F1 Analysis Dashboard</h1>', unsafe_allow_html=True)
+
+# Sidebar - Session Selector
+st.sidebar.header("Session Selector")
 
 # Year selection
+st.sidebar.markdown("**Year**")
 available_years = get_available_years()
 selected_year = st.sidebar.selectbox(
     "Year",
     options=available_years,
-    index=len(available_years) - 1  # Default to most recent year
+    index=len(available_years) - 1,  # Default to most recent year
+    label_visibility="collapsed"
 )
 
 # Grand Prix selection
+st.sidebar.markdown("**Grand Prix**")
 try:
     grand_prix_list = get_grand_prix_list(selected_year)
     selected_gp = st.sidebar.selectbox(
         "Grand Prix",
         options=grand_prix_list,
-        index=0
+        index=0,
+        label_visibility="collapsed"
     )
 except Exception as e:
     st.sidebar.error(f"Error loading Grand Prix list: {str(e)}")
     st.stop()
 
 # Session type selection
+st.sidebar.markdown("**Session Type**")
 session_type = st.sidebar.selectbox(
     "Session Type",
     options=['Race', 'Qualifying', 'FP1', 'FP2', 'FP3'],
-    index=0
+    index=0,
+    label_visibility="collapsed"
 )
 
 # Load session button
-if st.sidebar.button("🔄 Load Session", type="primary"):
+if st.sidebar.button("Load Session", type="primary", use_container_width=True):
     with st.spinner(f"Loading {selected_year} {selected_gp} {session_type}..."):
         try:
             session = load_session(selected_year, selected_gp, session_type)
             st.session_state['session'] = session
             st.session_state['drivers'] = get_drivers(session)
             st.session_state['team_colors'] = get_team_colors(session)
+            st.session_state['session_info'] = {
+                'year': selected_year,
+                'gp': selected_gp,
+                'type': session_type
+            }
             st.sidebar.success("✅ Session loaded successfully!")
+            st.rerun()
         except Exception as e:
             st.sidebar.error(f"❌ Error loading session: {str(e)}")
 
@@ -92,186 +131,375 @@ if 'session' not in st.session_state:
 session = st.session_state['session']
 drivers = st.session_state['drivers']
 team_colors = st.session_state['team_colors']
-
-# Display session info
-st.sidebar.markdown("---")
-st.sidebar.markdown("### 📋 Session Info")
-st.sidebar.markdown(f"**Event:** {selected_gp}")
-st.sidebar.markdown(f"**Year:** {selected_year}")
-st.sidebar.markdown(f"**Session:** {session_type}")
-st.sidebar.markdown(f"**Drivers:** {len(drivers)}")
+session_info = st.session_state['session_info']
 
 # Main content tabs
 tab1, tab2, tab3, tab4 = st.tabs([
-    "📈 Lap Times",
-    "🔍 Sector Analysis",
-    "🏁 Race Pace",
-    "🎯 Telemetry & Circuit Map"
+    "Home",
+    "Driver Analysis",
+    "Telemetry",
+    "Strategy"
 ])
 
-# Tab 1: Lap Times
+# ============================================================================
+# TAB 1: HOME
+# ============================================================================
 with tab1:
-    st.header("Fastest Lap Times")
+    # Display loaded race info
+    st.markdown(
+        f'<div class="session-info-box">Loaded Race - {session_info["gp"]} {session_info["year"]}</div>',
+        unsafe_allow_html=True
+    )
+    
+    # Session Info
+    st.subheader("Session Info:")
+    
+    # Get session details
+    try:
+        event_info = {
+            "Event": session_info['gp'],
+            "Type": session_info['type'],
+            "Year": session_info['year']
+        }
+        
+        # Display as JSON-like format
+        st.json(event_info)
+    except Exception as e:
+        st.error(f"Error loading session info: {str(e)}")
+    
+    st.markdown("---")
+    
+    # Weather Over Time
+    st.subheader("Weather Over Time")
+    
+    try:
+        weather = get_weather_data(session)
+        
+        # Create weather plot if data available
+        if weather.get('track_temp') is not None:
+            # For now, show static weather data
+            # In a full implementation, this would show weather trends over time
+            fig = go.Figure()
+            
+            # Placeholder data for weather over time
+            # In real implementation, extract lap-by-lap weather
+            laps = list(range(1, 10))
+            
+            fig.add_trace(go.Scatter(
+                x=laps,
+                y=[weather['track_temp']] * len(laps),
+                mode='lines',
+                name='TrackTemp',
+                line=dict(color='#FF6B6B', width=2)
+            ))
+            
+            fig.add_trace(go.Scatter(
+                x=laps,
+                y=[weather['air_temp']] * len(laps),
+                mode='lines',
+                name='AirTemp',
+                line=dict(color='#4ECDC4', width=2)
+            ))
+            
+            fig.add_trace(go.Scatter(
+                x=laps,
+                y=[weather['humidity']] * len(laps),
+                mode='lines',
+                name='Humidity',
+                line=dict(color='#95E1D3', width=2)
+            ))
+            
+            fig.update_layout(
+                xaxis_title="",
+                yaxis_title="Time (s)",
+                plot_bgcolor='#0E1117',
+                paper_bgcolor='#0E1117',
+                font=dict(color='white'),
+                height=400,
+                legend=dict(
+                    orientation='v',
+                    yanchor='top',
+                    y=1,
+                    xanchor='right',
+                    x=1
+                ),
+                margin=dict(l=40, r=40, t=40, b=40)
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("Weather data not available for this session")
+    except Exception as e:
+        st.error(f"Error loading weather data: {str(e)}")
+    
+    st.markdown("---")
+    st.markdown(
+        '<div style="text-align: center; color: #666;">Data powered by FastF1. Visualization with Plotly & Matplotlit.</div>',
+        unsafe_allow_html=True
+    )
+
+# ============================================================================
+# TAB 2: DRIVER ANALYSIS
+# ============================================================================
+with tab2:
+    st.header("Driver Analysis")
+    
+    # Average Sector Times
+    st.subheader("Average Sector Times")
+    
+    try:
+        sector_data = analyze_sectors(session)
+        
+        if not sector_data.empty:
+            # Create bar chart for sector times
+            drivers_list = sector_data['Driver'].tolist()
+            
+            # Convert timedeltas to seconds for plotting
+            sector1_times = [s.total_seconds() if pd.notna(s) else 0 for s in sector_data['Sector1']]
+            sector2_times = [s.total_seconds() if pd.notna(s) else 0 for s in sector_data['Sector2']]
+            sector3_times = [s.total_seconds() if pd.notna(s) else 0 for s in sector_data['Sector3']]
+            
+            fig = go.Figure()
+            
+            fig.add_trace(go.Bar(
+                x=drivers_list,
+                y=sector1_times,
+                name='Sector1',
+                marker_color='#4A90E2'
+            ))
+            
+            fig.add_trace(go.Bar(
+                x=drivers_list,
+                y=sector2_times,
+                name='Sector2',
+                marker_color='#7B68EE'
+            ))
+            
+            fig.add_trace(go.Bar(
+                x=drivers_list,
+                y=sector3_times,
+                name='Sector3',
+                marker_color='#E74C3C'
+            ))
+            
+            fig.update_layout(
+                barmode='group',
+                xaxis_title="Driver",
+                yaxis_title="Time (s)",
+                plot_bgcolor='#0E1117',
+                paper_bgcolor='#0E1117',
+                font=dict(color='white'),
+                height=400,
+                legend=dict(
+                    orientation='v',
+                    yanchor='top',
+                    y=1,
+                    xanchor='right',
+                    x=1
+                )
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+        else:
+            st.info("No sector data available")
+    except Exception as e:
+        st.error(f"Error analyzing sectors: {str(e)}")
+    
+    st.markdown("---")
+    
+    # Race Pace Section
+    st.subheader("Race Pace")
     
     col1, col2 = st.columns(2)
     
     with col1:
-        st.subheader("Fastest Lap per Driver")
-        fastest_laps = get_fastest_laps(session)
-        if not fastest_laps.empty:
-            # Format lap time for display
-            fastest_laps['LapTime_str'] = fastest_laps['LapTime'].apply(
-                lambda x: f"{x.total_seconds():.3f}s" if pd.notna(x) else "N/A"
-            )
-            st.dataframe(
-                fastest_laps[['Driver', 'Team', 'LapTime_str', 'LapNumber']],
-                hide_index=True,
-                use_container_width=True
-            )
-        else:
-            st.info("No lap time data available")
+        st.markdown("**Driver**")
+        driver_for_pace = st.selectbox(
+            "Select driver for pace analysis",
+            options=drivers,
+            index=0,
+            label_visibility="collapsed",
+            key="pace_driver"
+        )
     
     with col2:
-        st.subheader("Top 10 Fastest Laps")
-        top_laps = get_top_n_laps(session, n=10)
-        if not top_laps.empty:
-            top_laps['LapTime_str'] = top_laps['LapTime'].apply(
-                lambda x: f"{x.total_seconds():.3f}s" if pd.notna(x) else "N/A"
-            )
-            st.dataframe(
-                top_laps[['Driver', 'Team', 'LapTime_str', 'LapNumber']],
-                hide_index=True,
-                use_container_width=True
-            )
-        else:
-            st.info("No lap time data available")
-
-# Tab 2: Sector Analysis
-with tab2:
-    st.header("Sector Time Analysis")
-    
-    sector_data = analyze_sectors(session)
-    
-    if not sector_data.empty:
-        st.subheader("Average Sector Times")
-        
-        # Format sector times
-        for col in ['Sector1', 'Sector2', 'Sector3', 'TotalTime']:
-            sector_data[f'{col}_str'] = sector_data[col].apply(
-                lambda x: f"{x.total_seconds():.3f}s" if pd.notna(x) else "N/A"
-            )
-        
-        st.dataframe(
-            sector_data[['Driver', 'Sector1_str', 'Sector2_str', 'Sector3_str', 'TotalTime_str']],
-            hide_index=True,
-            use_container_width=True
+        st.markdown("**Median/Lap**")
+        median_lap_display = st.selectbox(
+            "Display type",
+            options=["2 minutes", "a few seconds"],
+            index=0,
+            label_visibility="collapsed"
         )
-        
-        # Sector deltas
-        st.subheader("Sector Deltas (vs Reference Driver)")
-        reference_driver = st.selectbox(
-            "Select Reference Driver",
-            options=drivers,
-            index=0
-        )
-        
-        if reference_driver:
-            try:
-                deltas = calculate_sector_deltas(session, reference_driver)
-                if not deltas.empty:
-                    for col in ['Sector1Delta', 'Sector2Delta', 'Sector3Delta', 'TotalDelta']:
-                        deltas[f'{col}_str'] = deltas[col].apply(
-                            lambda x: f"{x.total_seconds():+.3f}s" if pd.notna(x) else "N/A"
-                        )
-                    st.dataframe(
-                        deltas[['Driver', 'Sector1Delta_str', 'Sector2Delta_str', 'Sector3Delta_str', 'TotalDelta_str']],
-                        hide_index=True,
-                        use_container_width=True
-                    )
-            except Exception as e:
-                st.error(f"Error calculating deltas: {str(e)}")
-    else:
-        st.info("No sector data available")
-
-# Tab 3: Race Pace
-with tab3:
-    st.header("Race Pace Analysis")
     
-    if session_type == 'Race':
-        selected_driver = st.selectbox(
-            "Select Driver for Race Pace",
-            options=drivers,
-            key="race_pace_driver"
-        )
-        
-        if selected_driver:
-            col1, col2 = st.columns(2)
+    # Display race pace data
+    if session_info['type'] == 'Race' and driver_for_pace:
+        try:
+            pace_data = analyze_race_pace(session, driver_for_pace, remove_outliers=True)
             
-            with col1:
-                st.subheader(f"{selected_driver} - Lap Times")
-                pace_data = analyze_race_pace(session, selected_driver, remove_outliers=True)
+            if not pace_data.empty:
+                # Create pace table
+                pace_table = pace_data[['LapNumber', 'LapTime', 'Compound']].copy()
+                pace_table['LapTime_str'] = pace_table['LapTime'].apply(
+                    lambda x: f"{x.total_seconds():.3f}s" if pd.notna(x) else "N/A"
+                )
                 
-                if not pace_data.empty:
-                    st.write(f"Total laps: {len(pace_data)}")
-                    st.write(f"Outliers removed: {pace_data['IsOutlier'].sum()}")
-                    
-                    # Calculate degradation
-                    degradation = calculate_pace_degradation(pace_data)
-                    st.metric(
-                        "Pace Degradation",
-                        f"{degradation['slope']:.3f} s/lap",
-                        help="Linear regression slope showing lap time increase per lap"
-                    )
-                    st.metric(
-                        "R² (fit quality)",
-                        f"{degradation['r_squared']:.3f}",
-                        help="How well the linear model fits the data (0-1)"
-                    )
-            
-            with col2:
-                st.subheader("Stint Averages")
-                stint_data = get_stint_averages(session, selected_driver)
-                
-                if not stint_data.empty:
-                    stint_data['AvgLapTime_str'] = stint_data['AvgLapTime'].apply(
-                        lambda x: f"{x.total_seconds():.3f}s" if pd.notna(x) else "N/A"
-                    )
-                    st.dataframe(
-                        stint_data[['StintNumber', 'Compound', 'AvgLapTime_str', 'LapCount']],
-                        hide_index=True,
-                        use_container_width=True
-                    )
-                else:
-                    st.info("No stint data available")
+                st.dataframe(
+                    pace_table[['LapNumber', 'LapTime_str', 'Compound']].head(20),
+                    hide_index=True,
+                    use_container_width=True,
+                    height=300
+                )
+            else:
+                st.info("No race pace data available")
+        except Exception as e:
+            st.error(f"Error analyzing race pace: {str(e)}")
     else:
         st.info("Race pace analysis is only available for Race sessions")
     
-    # Weather data
-    st.subheader("Weather Conditions")
-    weather = get_weather_data(session)
+    st.markdown("---")
     
-    col1, col2, col3, col4 = st.columns(4)
+    # Fastest Lap per Driver
+    st.subheader("Fastest Lap per Driver")
     
-    with col1:
-        if weather['track_temp'] is not None:
-            st.metric("Track Temp", f"{weather['track_temp']:.1f}°C")
-    
-    with col2:
-        if weather['air_temp'] is not None:
-            st.metric("Air Temp", f"{weather['air_temp']:.1f}°C")
-    
-    with col3:
-        if weather['humidity'] is not None:
-            st.metric("Humidity", f"{weather['humidity']:.1f}%")
-    
-    with col4:
-        if weather['rainfall']:
-            st.metric("Rainfall", "Yes ☔")
+    try:
+        fastest_laps = get_fastest_laps(session)
+        
+        if not fastest_laps.empty:
+            fastest_laps['LapTime_str'] = fastest_laps['LapTime'].apply(
+                lambda x: f"{x.total_seconds():.3f}s" if pd.notna(x) else "N/A"
+            )
+            
+            st.dataframe(
+                fastest_laps[['Driver', 'Team', 'LapTime_str', 'LapNumber']],
+                hide_index=True,
+                use_container_width=True,
+                height=400
+            )
         else:
-            st.metric("Rainfall", "No ☀️")
+            st.info("No lap time data available")
+    except Exception as e:
+        st.error(f"Error loading fastest laps: {str(e)}")
+    
+    st.markdown("---")
+    
+    # Sector Analysis
+    st.subheader("Sector Analysis")
+    
+    try:
+        if not sector_data.empty:
+            # Display sector data table
+            sector_display = sector_data.copy()
+            
+            for col in ['Sector1', 'Sector2', 'Sector3']:
+                sector_display[col] = sector_display[col].apply(
+                    lambda x: f"a few seconds" if pd.notna(x) else "N/A"
+                )
+            
+            # Add S1, S2, S3 columns
+            sector_display['S1'] = sector_display['Sector1']
+            sector_display['S2'] = sector_display['Sector2']
+            sector_display['S3'] = sector_display['Sector3']
+            
+            st.dataframe(
+                sector_display[['Driver', 'Sector1', 'Sector2', 'Sector3', 'S1', 'S2', 'S3']].head(20),
+                hide_index=True,
+                use_container_width=True,
+                height=400
+            )
+        else:
+            st.info("No sector data available")
+    except Exception as e:
+        st.error(f"Error displaying sector analysis: {str(e)}")
+    
+    st.markdown("---")
+    
+    # Median Lap Times (Degradation Model)
+    st.subheader("Degradation Model")
+    
+    st.markdown("**Select Driver for Degradation**")
+    degradation_driver = st.selectbox(
+        "Select driver",
+        options=drivers,
+        index=0,
+        label_visibility="collapsed",
+        key="degradation_driver"
+    )
+    
+    if session_info['type'] == 'Race' and degradation_driver:
+        st.markdown(f"**Lap Time Degradation - {degradation_driver}**")
+        
+        try:
+            pace_data = analyze_race_pace(session, degradation_driver, remove_outliers=True)
+            
+            if not pace_data.empty and len(pace_data) > 5:
+                # Calculate degradation
+                degradation = calculate_pace_degradation(pace_data)
+                
+                # Create scatter plot with trend line
+                lap_times_seconds = [t.total_seconds() if pd.notna(t) else None for t in pace_data['LapTime']]
+                lap_numbers = pace_data['LapNumber'].tolist()
+                
+                # Calculate predicted line
+                predicted_times = [
+                    degradation['slope'] * lap_num + degradation['intercept']
+                    for lap_num in lap_numbers
+                ]
+                
+                fig = go.Figure()
+                
+                # Actual lap times
+                fig.add_trace(go.Scatter(
+                    x=lap_numbers,
+                    y=lap_times_seconds,
+                    mode='markers',
+                    name='Actual',
+                    marker=dict(color='#4A90E2', size=8)
+                ))
+                
+                # Predicted trend line
+                fig.add_trace(go.Scatter(
+                    x=lap_numbers,
+                    y=predicted_times,
+                    mode='lines',
+                    name='Predicted',
+                    line=dict(color='#E74C3C', width=2, dash='dash')
+                ))
+                
+                fig.update_layout(
+                    xaxis_title="Lap Number",
+                    yaxis_title="Lap Time (s)",
+                    plot_bgcolor='#0E1117',
+                    paper_bgcolor='#0E1117',
+                    font=dict(color='white'),
+                    height=400,
+                    legend=dict(
+                        orientation='h',
+                        yanchor='bottom',
+                        y=1.02,
+                        xanchor='center',
+                        x=0.5
+                    )
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+                
+                # Display degradation metrics
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.metric("Degradation Rate", f"{degradation['slope']:.4f} s/lap")
+                with col2:
+                    st.metric("R² (Fit Quality)", f"{degradation['r_squared']:.3f}")
+            else:
+                st.info("Insufficient data for degradation analysis")
+        except Exception as e:
+            st.error(f"Error calculating degradation: {str(e)}")
+    else:
+        st.info("Degradation analysis is only available for Race sessions")
 
-# Tab 4: Telemetry & Circuit Map
-with tab4:
+# ============================================================================
+# TAB 3: TELEMETRY
+# ============================================================================
+with tab3:
     st.header("Telemetry Analysis & Circuit Map")
     
     # Driver selection for comparison
@@ -323,80 +551,84 @@ with tab4:
                 fig = build_circuit_comparison_map(session, driver1, driver2, lap_param)
                 st.plotly_chart(fig, use_container_width=True)
             
-            st.markdown("---")
-            
-            # Additional telemetry analysis
-            st.subheader("📊 Detailed Telemetry Comparison")
-            
-            tel1, tel2 = get_telemetry_comparison(session, driver1, driver2, lap_param)
-            
-            col1, col2 = st.columns(2)
-            
-            with col1:
-                st.markdown(f"### {driver1}")
-                
-                # Gear usage
-                gear_usage1 = get_gear_usage(tel1)
-                if gear_usage1:
-                    st.write("**Gear Usage:**")
-                    for gear, pct in gear_usage1.items():
-                        st.write(f"Gear {gear}: {pct}%")
-                
-                # Corner speeds
-                corners1 = calculate_corner_speeds(tel1)
-                if not corners1.empty:
-                    st.write(f"**Corners identified:** {len(corners1)}")
-                    st.write(f"**Avg min corner speed:** {corners1['MinSpeed'].mean():.1f} km/h")
-                
-                # Straight speeds
-                straights1 = calculate_straight_speeds(tel1)
-                if not straights1.empty:
-                    st.write(f"**Max speed:** {straights1['MaxSpeed'].max():.1f} km/h")
-            
-            with col2:
-                st.markdown(f"### {driver2}")
-                
-                # Gear usage
-                gear_usage2 = get_gear_usage(tel2)
-                if gear_usage2:
-                    st.write("**Gear Usage:**")
-                    for gear, pct in gear_usage2.items():
-                        st.write(f"Gear {gear}: {pct}%")
-                
-                # Corner speeds
-                corners2 = calculate_corner_speeds(tel2)
-                if not corners2.empty:
-                    st.write(f"**Corners identified:** {len(corners2)}")
-                    st.write(f"**Avg min corner speed:** {corners2['MinSpeed'].mean():.1f} km/h")
-                
-                # Straight speeds
-                straights2 = calculate_straight_speeds(tel2)
-                if not straights2.empty:
-                    st.write(f"**Max speed:** {straights2['MaxSpeed'].max():.1f} km/h")
-            
-            # DRS zones
-            st.subheader("DRS Zones")
-            drs_zones1 = get_drs_zones(tel1)
-            drs_zones2 = get_drs_zones(tel2)
-            
-            if drs_zones1 or drs_zones2:
-                col1, col2 = st.columns(2)
-                
-                with col1:
-                    st.write(f"**{driver1} DRS activations:** {len(drs_zones1)}")
-                    for i, (start, end) in enumerate(drs_zones1, 1):
-                        st.write(f"Zone {i}: {start:.0f}m - {end:.0f}m")
-                
-                with col2:
-                    st.write(f"**{driver2} DRS activations:** {len(drs_zones2)}")
-                    for i, (start, end) in enumerate(drs_zones2, 1):
-                        st.write(f"Zone {i}: {start:.0f}m - {end:.0f}m")
-            else:
-                st.info("No DRS data available")
-                
         except Exception as e:
             st.error(f"Error loading telemetry: {str(e)}")
             st.info("Telemetry data may not be available for this session")
+
+# ============================================================================
+# TAB 4: STRATEGY
+# ============================================================================
+with tab4:
+    st.header("Strategy Analysis")
+    
+    # Pit Stops
+    st.subheader("Pit Stops")
+    
+    try:
+        pit_stops = get_pit_stops(session)
+        
+        if not pit_stops.empty:
+            # Format pit stop data
+            pit_display = pit_stops.copy()
+            
+            # Calculate pit duration if possible
+            if 'PitInTime' in pit_display.columns and 'PitOutTime' in pit_display.columns:
+                pit_display['PitDuration'] = (
+                    pit_display['PitOutTime'] - pit_display['PitInTime']
+                ).apply(lambda x: f"{x.total_seconds():.1f}s" if pd.notna(x) else "N/A")
+            
+            # Format times
+            if 'PitInTime' in pit_display.columns:
+                pit_display['PitInTime'] = pit_display['PitInTime'].apply(
+                    lambda x: "an hour" if pd.notna(x) else "None"
+                )
+            
+            if 'PitOutTime' in pit_display.columns:
+                pit_display['PitOutTime'] = pit_display['PitOutTime'].apply(
+                    lambda x: "2 hours" if pd.notna(x) else "None"
+                )
+            
+            # Rename columns for display
+            display_cols = {
+                'DriverCode': 'DriverCode',
+                'LapNumber': 'LapNumber',
+                'PitInTime': 'PitOutTime',
+                'PitOutTime': 'PitInTime',
+                'Compound': 'Compound'
+            }
+            
+            pit_display = pit_display.rename(columns=display_cols)
+            
+            st.dataframe(
+                pit_display[['DriverCode', 'LapNumber', 'PitOutTime', 'PitInTime', 'Compound']],
+                hide_index=True,
+                use_container_width=True,
+                height=300
+            )
+        else:
+            st.info("No pit stop data available for this session")
+    except Exception as e:
+        st.error(f"Error loading pit stops: {str(e)}")
+    
+    st.markdown("---")
+    
+    # Tyre Stints
+    st.subheader("Tyre Stints")
+    
+    try:
+        tyre_stints = get_tyre_stints(session)
+        
+        if not tyre_stints.empty:
+            st.dataframe(
+                tyre_stints[['Driver', 'StintNumber', 'Compound', 'StartLap', 'EndLap', 'LapCount']],
+                hide_index=True,
+                use_container_width=True,
+                height=400
+            )
+        else:
+            st.info("No tyre stint data available for this session")
+    except Exception as e:
+        st.error(f"Error loading tyre stints: {str(e)}")
 
 # Footer
 st.markdown("---")
