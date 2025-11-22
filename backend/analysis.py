@@ -252,13 +252,13 @@ def analyze_race_pace(_session: fastf1.core.Session, driver: str, remove_outlier
 
 
 @st.cache_data(ttl=3600, show_spinner=False)
-def calculate_pace_degradation(laps_df: pd.DataFrame) -> Dict[str, float]:
+def calculate_pace_degradation(_laps_df: pd.DataFrame) -> Dict[str, float]:
     """
     Use linear regression to calculate lap time degradation per lap.
     
     Args:
-        laps_df: DataFrame with columns [LapNumber, LapTime, ...]
-                 Should be output from analyze_race_pace()
+        _laps_df: DataFrame with columns [LapNumber, LapTime, ...]
+                  Should be output from analyze_race_pace()
     
     Returns:
         Dictionary with keys:
@@ -266,14 +266,14 @@ def calculate_pace_degradation(laps_df: pd.DataFrame) -> Dict[str, float]:
         - 'intercept': initial pace in seconds
         - 'r_squared': fit quality (0-1)
     """
-    if laps_df.empty or len(laps_df) < 2:
+    if _laps_df.empty or len(_laps_df) < 2:
         return {'slope': 0.0, 'intercept': 0.0, 'r_squared': 0.0}
     
     # Filter out outliers if IsOutlier column exists
-    if 'IsOutlier' in laps_df.columns:
-        clean_laps = laps_df[~laps_df['IsOutlier']].copy()
+    if 'IsOutlier' in _laps_df.columns:
+        clean_laps = _laps_df[~_laps_df['IsOutlier']].copy()
     else:
-        clean_laps = laps_df.copy()
+        clean_laps = _laps_df.copy()
     
     if len(clean_laps) < 2:
         return {'slope': 0.0, 'intercept': 0.0, 'r_squared': 0.0}
